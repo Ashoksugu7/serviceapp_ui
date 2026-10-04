@@ -17,6 +17,18 @@ npm run dev
 Open `http://localhost:3000`. `/styleguide` (development only, no sign-in)
 shows every shared component.
 
+## Docker
+
+Build and start the production UI container:
+
+```sh
+docker compose up -d --build
+```
+
+It is available at `http://localhost:3000` by default. Set `API_BASE_URL` to
+the reachable Go API origin (default: `http://host.docker.internal:8080`) and
+`UI_PORT` to change the exposed port.
+
 ## How it talks to the API
 
 - `POST /api/auth/login` exchanges credentials with the Go API and stores the

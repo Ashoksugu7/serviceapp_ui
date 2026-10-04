@@ -1,0 +1,13 @@
+.next/
+node_modules/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+e2e/.auth/
+e2e/.report/
+.env*
+.git/
+.DS_Store
+*.tsbuildinfo
+npm-debug.log*
