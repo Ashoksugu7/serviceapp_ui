@@ -16,12 +16,16 @@ function useEscape(open: boolean, onClose: () => void) {
 
 /* ---------- Drawer: slide-over form panel ---------- */
 
-export function Drawer({ open, title, description, onClose, onSubmit, submitLabel = 'Save', submitting, error, children }: {
+export function Drawer({ open, title, description, onClose, onSubmit, onInput, noValidate, submitLabel = 'Save', submitting, error, children }: {
   open: boolean
   title: string
   description?: ReactNode
   onClose: () => void
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void
+  /** Lets a form clear a field's message as soon as it is edited. */
+  onInput?: (event: FormEvent<HTMLFormElement>) => void
+  /** Skip the browser's own validation popups when the form shows its own messages (UI05). */
+  noValidate?: boolean
   submitLabel?: string
   submitting?: boolean
   error?: string | null
@@ -36,6 +40,8 @@ export function Drawer({ open, title, description, onClose, onSubmit, submitLabe
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        noValidate={noValidate}
+        onInput={onInput}
         onSubmit={(event) => {
           event.preventDefault()
           onSubmit?.(event)

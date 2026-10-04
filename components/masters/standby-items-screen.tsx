@@ -8,7 +8,7 @@ import { Drawer, useToast } from '@/components/ui/overlay'
 import { useCompanyId, useIdentity } from '@/components/shell/identity'
 import { formError } from '@/lib/api-client'
 import { formatAmount } from '@/lib/format'
-import { fieldErrors, formValues, useApiMutation, useListState, useLocalList } from '@/lib/queries'
+import { fieldErrors, formValues, useApiMutation, useList, useListState } from '@/lib/queries'
 import type { StandbyItem } from '@/lib/types'
 
 export function StandbyItemsScreen() {
@@ -16,7 +16,7 @@ export function StandbyItemsScreen() {
   const canWrite = useIdentity().user.role === 'ADMIN'
   const base = `/companies/${companyId}/standby-items`
   const list = useListState({ status: '' })
-  const query = useLocalList<StandbyItem>(base, list.params, (item) => [item.name, item.serial_no, item.category])
+  const query = useList<StandbyItem>(base, list.params)
   const save = useApiMutation<StandbyItem>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ item: StandbyItem | null } | null>(null)

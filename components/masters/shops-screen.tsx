@@ -7,7 +7,8 @@ import { FilterSelect, ListCard, SearchInput, statusLabel, statusTone } from '@/
 import { Drawer, useToast } from '@/components/ui/overlay'
 import { useCompanyId, useIdentity } from '@/components/shell/identity'
 import { formError } from '@/lib/api-client'
-import { fieldErrors, formValues, useApiMutation, useListState, useLocalList, useProfiles } from '@/lib/queries'
+import { fieldErrors, formValues, useApiMutation, useList, useListState, useProfiles } from '@/lib/queries'
+import { rules, useFormCheck } from '@/lib/validation'
 import type { OutStoreShop } from '@/lib/types'
 
 export function ShopsScreen() {
@@ -16,21 +17,24 @@ export function ShopsScreen() {
   const base = `/companies/${companyId}/out-store-shops`
   const profiles = useProfiles(companyId).data?.items ?? []
   const list = useListState({ status: '' })
-  const query = useLocalList<OutStoreShop>(base, list.params, (shop) => [shop.shop_name, shop.contact_person, shop.contact, shop.address])
+  const query = useList<OutStoreShop>(base, list.params)
   const save = useApiMutation<OutStoreShop>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ shop: OutStoreShop | null } | null>(null)
   const editing = editor?.shop ?? null
-  const errors = fieldErrors(save.error)
+  const check = useFormCheck()
+  const errors = { ...fieldErrors(save.error), ...check.errors }
   const scope = (id: string | null) => (id ? profiles.find((profile) => profile.id === id)?.name ?? '—' : 'All profiles')
 
   function open(shop: OutStoreShop | null) {
     save.reset()
+    check.clear()
     setEditor({ shop })
   }
 
   function submit(form: HTMLFormElement) {
     const values = formValues(form)
+    if (!check.check(values, { shop_name: rules.name, contact_person: rules.text, contact: rules.phone, address: rules.address })) return
     const details = { shop_name: values.shop_name, contact_person: values.contact_person, contact: values.contact, address: values.address, status: values.status ?? 'ACTIVE' }
     save.mutate(
       { path: editing ? `${base}/${editing.id}` : base, method: editing ? 'PATCH' : 'POST', body: editing ? details : { ...details, profile_id: values.profile_id } },
@@ -85,7 +89,9 @@ export function ShopsScreen() {
         onSubmit={(event) => submit(event.currentTarget)}
         submitLabel={editing ? 'Save changes' : 'Create shop'}
         submitting={save.isPending}
-        error={formError(save.error)}
+        error={check.summary ?? formError(save.error)}
+        noValidate
+        onInput={check.onInput}
       >
         {!editing && (
           <Field label="Serves profile" error={errors.profile_id} hint="Cannot be changed after creation.">

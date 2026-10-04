@@ -37,13 +37,13 @@ const options = {
 // Development preview of the Service Entry field renderer with sample data.
 export function DynamicDemo() {
   const [values, setValues] = useState<FormValues>({})
-  const [customer, setCustomer] = useState<CustomerChoice>(null)
+  const [customer, setCustomer] = useState<CustomerChoice>({ kind: 'existing', customer: customers[0] })
   const calculated = useMemo(() => evaluateFormulas(fields, values), [values])
   return (
     <Card className="mt-8 overflow-visible">
       <CardHeader title="Service Entry fields" description="All field types rendered from a sample profile." />
       <CardBody className="grid gap-5 sm:grid-cols-2">
-        <CustomerLookup label="Contact No / Customer No" customers={customers} value={customer} allowCreate onChange={setCustomer} />
+        <CustomerLookup label="Mobile No" base="/companies/demo" value={customer} allowCreate onChange={setCustomer} />
         {fields.map((field) => (
           <DynamicFieldInput
             key={field.key}

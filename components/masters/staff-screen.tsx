@@ -7,7 +7,8 @@ import { FilterSelect, ListCard, SearchInput, statusLabel, statusTone } from '@/
 import { ConfirmDialog, Drawer, useToast } from '@/components/ui/overlay'
 import { useCompanyId, useIdentity } from '@/components/shell/identity'
 import { apiErrorMessage, formError } from '@/lib/api-client'
-import { fieldErrors, formValues, useApiMutation, useList, useListState, useLocalList } from '@/lib/queries'
+import { fieldErrors, formValues, useAll, useApiMutation, useList, useListState } from '@/lib/queries'
+import { rules, useFormCheck } from '@/lib/validation'
 import type { Staff, StaffRole } from '@/lib/types'
 
 export function StaffScreen() {
@@ -16,23 +17,26 @@ export function StaffScreen() {
   const base = `/companies/${companyId}/staff`
   const rolesPath = `/companies/${companyId}/staff-roles`
   const list = useListState({ status: '' })
-  const query = useLocalList<Staff>(base, list.params, (member) => [member.name, member.contact, member.email, member.specialization])
-  const roles = useList<StaffRole>(rolesPath, { page_size: 100 })
+  const query = useList<Staff>(base, list.params)
+  const roles = useAll<StaffRole>(rolesPath)
   const save = useApiMutation<Staff>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ member: Staff | null } | null>(null)
   const editing = editor?.member ?? null
-  const errors = fieldErrors(save.error)
+  const check = useFormCheck()
+  const errors = { ...fieldErrors(save.error), ...check.errors }
   const roleList = roles.data?.items ?? []
   const roleName = (id: string) => roleList.find((role) => role.id === id)?.name ?? 'Unknown role'
 
   function open(member: Staff | null) {
     save.reset()
+    check.clear()
     setEditor({ member })
   }
 
   function submit(form: HTMLFormElement) {
     const values = formValues(form)
+    if (!check.check(values, { name: rules.name, contact: rules.requiredPhone, email: rules.email, specialization: rules.text })) return
     const roleIds = new FormData(form).getAll('role_ids').map(String)
     save.mutate(
       {
@@ -98,7 +102,9 @@ export function StaffScreen() {
         onSubmit={(event) => submit(event.currentTarget)}
         submitLabel={editing ? 'Save changes' : 'Create staff'}
         submitting={save.isPending}
-        error={formError(save.error)}
+        error={check.summary ?? formError(save.error)}
+        noValidate
+        onInput={check.onInput}
       >
         <Field label="Name" required error={errors.name}><Input name="name" required defaultValue={editing?.name} invalid={!!errors.name} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">

@@ -7,8 +7,9 @@ import { ListCard, SearchInput } from '@/components/ui/list'
 import { Drawer, useToast } from '@/components/ui/overlay'
 import { useCompanyId, useIdentity } from '@/components/shell/identity'
 import { formError } from '@/lib/api-client'
-import { fieldErrors, formValues, useApiMutation, useListState, useLocalList } from '@/lib/queries'
+import { fieldErrors, formValues, useApiMutation, useList, useListState } from '@/lib/queries'
 import { digitsOf } from '@/lib/customers'
+import { rules, useFormCheck } from '@/lib/validation'
 import type { Customer } from '@/lib/types'
 
 export function CustomersScreen() {
@@ -16,20 +17,23 @@ export function CustomersScreen() {
   const canWrite = useIdentity().user.role === 'ADMIN'
   const base = `/companies/${companyId}/customers`
   const list = useListState({})
-  const query = useLocalList<Customer>(base, list.params, (customer) => [customer.name, customer.contact, digitsOf(customer.contact), customer.email])
+  const query = useList<Customer>(base, list.params)
   const save = useApiMutation<Customer>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ customer: Customer | null } | null>(null)
   const editing = editor?.customer ?? null
-  const errors = fieldErrors(save.error)
+  const check = useFormCheck()
+  const errors = { ...fieldErrors(save.error), ...check.errors }
 
   function open(customer: Customer | null) {
     save.reset()
+    check.clear()
     setEditor({ customer })
   }
 
   function submit(form: HTMLFormElement) {
     const { name, contact, email, address } = formValues(form)
+    if (!check.check({ name, contact, email, address }, { name: rules.name, contact: rules.requiredPhone, email: rules.email, address: rules.address })) return
     save.mutate(
       { path: editing ? `${base}/${editing.id}` : base, method: editing ? 'PATCH' : 'POST', body: { name, contact, email, address } },
       {
@@ -87,7 +91,9 @@ export function CustomersScreen() {
         onSubmit={(event) => submit(event.currentTarget)}
         submitLabel={editing ? 'Save changes' : 'Create customer'}
         submitting={save.isPending}
-        error={formError(save.error)}
+        error={check.summary ?? formError(save.error)}
+        noValidate
+        onInput={check.onInput}
       >
         <Field label="Customer name" required error={errors.name}><Input name="name" required defaultValue={editing?.name} invalid={!!errors.name} /></Field>
         <Field label="Mobile no" required error={errors.contact}><Input name="contact" type="tel" inputMode="tel" maxLength={50} required defaultValue={editing?.contact} invalid={!!errors.contact} /></Field>

@@ -5,14 +5,14 @@ import { PackageCheck, Pencil, Send, Truck } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Badge, Button, SegmentedTabs, Table, Td, Th } from '@/components/ui'
-import { FilterSelect, ListCard } from '@/components/ui/list'
+import { FilterSelect, ListCard, SearchInput } from '@/components/ui/list'
 import { ConfirmDialog, useToast } from '@/components/ui/overlay'
 import { useCompanyId } from '@/components/shell/identity'
 import { apiErrorMessage } from '@/lib/api-client'
 import { formatDate, localToday } from '@/lib/dates'
 import { formatAmount } from '@/lib/format'
-import { useApiMutation, useList, useListState, useResource } from '@/lib/queries'
-import type { OutStoreEntry, OutStoreShop, ServiceRequestDetail } from '@/lib/types'
+import { useAll, useApiMutation, useList, useListState } from '@/lib/queries'
+import type { OutStoreEntry, OutStoreShop } from '@/lib/types'
 import { OutStoreEntryDrawer } from './entry-drawer'
 
 type Tab = 'SENT' | 'RECEIVED_BACK' | ''
@@ -28,8 +28,7 @@ export function OutStoreScreen() {
   const list = useListState({ shop_id: '' })
   // Out-Store entries are paged and filtered by the API.
   const entries = useList<OutStoreEntry>(`${base}/out-store-entries`, { ...list.params, status: tab, sort: 'sent_date', order: tab === 'SENT' ? 'asc' : 'desc' })
-  const shops = useList<OutStoreShop>(`${base}/out-store-shops`)
-  const shopName = (id: string) => shops.data?.items.find((shop) => shop.id === id)?.shop_name ?? '—'
+  const shops = useAll<OutStoreShop>(`${base}/out-store-shops`)
   const [drawer, setDrawer] = useState<{ entry?: OutStoreEntry } | null>(null)
   const [receiving, setReceiving] = useState<OutStoreEntry | null>(null)
 
@@ -49,12 +48,15 @@ export function OutStoreScreen() {
         page={list.page}
         onPage={list.setPage}
         toolbar={
-          <FilterSelect
-            label="Shop"
-            value={list.filters.shop_id}
-            onChange={(value) => list.setFilter('shop_id', value)}
-            options={[{ value: '', label: 'All shops' }, ...(shops.data?.items ?? []).map((shop) => ({ value: shop.id, label: shop.shop_name }))]}
-          />
+          <>
+            <SearchInput value={list.q} onChange={list.setQ} placeholder="Record no, customer, mobile or shop" />
+            <FilterSelect
+              label="Shop"
+              value={list.filters.shop_id}
+              onChange={(value) => list.setFilter('shop_id', value)}
+              options={[{ value: '', label: 'All shops' }, ...(shops.data?.items ?? []).map((shop) => ({ value: shop.id, label: shop.shop_name }))]}
+            />
+          </>
         }
         empty={{
           icon: Truck,
@@ -70,15 +72,21 @@ export function OutStoreScreen() {
             <tbody>
               {items.map((entry) => (
                 <tr key={entry.id} className="hover:bg-slate-50/60">
-                  <Td><RecordCell base={base} id={entry.service_request_id} /></Td>
                   <Td>
-                    {shopName(entry.shop_id)}
+                    <Link href={`/records/${entry.service_request_id}`} className="group">
+                      <span className="font-mono text-sm font-semibold text-slate-900 group-hover:text-brand-700">{entry.request_no}</span>
+                      <span className="block text-xs text-slate-500">{entry.customer_name}</span>
+                    </Link>
+                    {entry.customer_contact && <a href={`tel:${entry.customer_contact.replace(/[^0-9+]/g, '')}`} className="text-xs tabular-nums text-slate-400 hover:text-brand-700">{entry.customer_contact}</a>}
+                  </Td>
+                  <Td>
+                    {entry.shop_name}
                     {entry.remarks && <div className="max-w-[12rem] truncate text-xs text-slate-400" title={entry.remarks}>{entry.remarks}</div>}
                   </Td>
                   <Td className="tabular-nums">{formatDate(entry.sent_date)}</Td>
-                  <Td className={clsx('tabular-nums', isOverdue(entry) && 'font-medium text-rose-600')}>
+                  <Td className={clsx('tabular-nums', (entry.overdue ?? isOverdue(entry)) && 'font-medium text-rose-600')}>
                     {formatDate(entry.due_date)}
-                    {isOverdue(entry) && <div className="text-[11px] font-normal">Overdue</div>}
+                    {(entry.overdue ?? isOverdue(entry)) && <div className="text-[11px] font-normal">Overdue</div>}
                   </Td>
                   <Td className="hidden text-right tabular-nums md:table-cell">{formatAmount(entry.price)}</Td>
                   <Td>
@@ -102,20 +110,8 @@ export function OutStoreScreen() {
       </ListCard>
 
       {drawer && <OutStoreEntryDrawer base={base} entry={drawer.entry} onClose={() => setDrawer(null)} />}
-      <ReceiveDialog base={base} entry={receiving} shopName={receiving ? shopName(receiving.shop_id) : ''} onClose={() => setReceiving(null)} />
+      <ReceiveDialog base={base} entry={receiving} shopName={receiving?.shop_name ?? ''} onClose={() => setReceiving(null)} />
     </div>
-  )
-}
-
-// The entries list only carries IDs, so each row resolves its record (cached).
-function RecordCell({ base, id }: { base: string; id: string }) {
-  const record = useResource<ServiceRequestDetail>(`${base}/service-requests/${id}`)
-  if (!record.data) return <span className="text-slate-400">{record.error ? 'Unavailable' : '…'}</span>
-  return (
-    <Link href={`/records/${id}`} className="group">
-      <span className="font-mono text-sm font-semibold text-slate-900 group-hover:text-brand-700">{record.data.request_no}</span>
-      <span className="block text-xs text-slate-500">{record.data.customer.name} · {record.data.status_name}</span>
-    </Link>
   )
 }
 

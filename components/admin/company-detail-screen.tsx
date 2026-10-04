@@ -8,6 +8,7 @@ import { statusLabel, statusTone } from '@/components/ui/list'
 import { ConfirmDialog, Drawer, useToast } from '@/components/ui/overlay'
 import { apiErrorMessage, formError } from '@/lib/api-client'
 import { fieldErrors, formValues, useApiMutation, useResource } from '@/lib/queries'
+import { rules, useFormCheck } from '@/lib/validation'
 import type { Company } from '@/lib/types'
 import { UsersManager } from './users-manager'
 
@@ -19,7 +20,8 @@ export function CompanyDetailScreen({ companyId }: { companyId: string }) {
   const notify = useToast()
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
-  const errors = fieldErrors(update.error)
+  const check = useFormCheck()
+  const errors = { ...fieldErrors(update.error), ...check.errors }
 
   const back = (
     <Link href="/admin/companies" className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700">
@@ -36,6 +38,7 @@ export function CompanyDetailScreen({ companyId }: { companyId: string }) {
 
   function saveDetails(form: HTMLFormElement) {
     const values = formValues(form)
+    if (!check.check(values, { name: rules.name, email: rules.email, contact: rules.phone, address: rules.address })) return
     update.mutate(
       { path, method: 'PATCH', body: { name: values.name, email: values.email, contact: values.contact, address: values.address } },
       { onSuccess: (result) => { notify(`${result.name} was updated.`); setEditing(false) } },
@@ -67,7 +70,7 @@ export function CompanyDetailScreen({ companyId }: { companyId: string }) {
             >
               <Settings2 size={15} /> Service profiles
             </Link>
-            <Button variant="secondary" icon={Pencil} onClick={() => { update.reset(); setEditing(true) }}>Edit</Button>
+            <Button variant="secondary" icon={Pencil} onClick={() => { update.reset(); check.clear(); setEditing(true) }}>Edit</Button>
             <Button variant={suspending ? 'danger' : 'primary'} onClick={() => setConfirming(true)}>
               {suspending ? 'Suspend' : 'Reactivate'}
             </Button>
@@ -97,7 +100,9 @@ export function CompanyDetailScreen({ companyId }: { companyId: string }) {
         onSubmit={(event) => saveDetails(event.currentTarget)}
         submitLabel="Save changes"
         submitting={update.isPending}
-        error={formError(update.error)}
+        error={check.summary ?? formError(update.error)}
+        noValidate
+        onInput={check.onInput}
       >
         <Field label="Company name" required error={errors.name}><Input name="name" required defaultValue={data.name} invalid={!!errors.name} /></Field>
         <Field label="Email" error={errors.email}><Input name="email" type="email" defaultValue={data.email ?? ''} invalid={!!errors.email} /></Field>

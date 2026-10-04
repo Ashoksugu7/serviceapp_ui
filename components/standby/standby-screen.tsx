@@ -14,7 +14,7 @@ import { RecordPicker } from '@/components/records/record-picker'
 import { APIError, apiErrorMessage, formError } from '@/lib/api-client'
 import { formatDate, localToday } from '@/lib/dates'
 import { formatAmount } from '@/lib/format'
-import { useApiMutation, useList, useListState, useLocalList } from '@/lib/queries'
+import { useAll, useApiMutation, useList, useListState } from '@/lib/queries'
 import { daysLabel, localDate } from '@/lib/history'
 import type { Customer, Product, StandbyIssue, StandbyIssueHistory, StandbyItem } from '@/lib/types'
 
@@ -34,11 +34,9 @@ export function StandbyScreen() {
 
 function ItemsView({ base }: { base: string }) {
   const list = useListState({ status: '' })
-  const items = useLocalList<StandbyItem>(`${base}/standby-items`, list.params, (item) => [item.name, item.serial_no, item.category])
-  const customers = useList<Customer>(`${base}/customers`)
-  const customerName = (id: string) => customers.data?.items.find((customer) => customer.id === id)?.name ?? '—'
+  const items = useList<StandbyItem>(`${base}/standby-items`, list.params)
   const [issuing, setIssuing] = useState<StandbyItem | null>(null)
-  const [returning, setReturning] = useState<{ item: StandbyItem; issue: StandbyIssue } | null>(null)
+  const [returning, setReturning] = useState<{ item: StandbyItem; issue: StandbyIssueHistory } | null>(null)
   const [historyFor, setHistoryFor] = useState<StandbyItem | null>(null)
 
   return (
@@ -73,7 +71,7 @@ function ItemsView({ base }: { base: string }) {
                   <Td><Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge></Td>
                   <Td>
                     {item.status === 'ISSUED'
-                      ? <CurrentIssue base={base} item={item} customerName={customerName} onReturn={(issue) => setReturning({ item, issue })} />
+                      ? <CurrentIssue base={base} item={item} onReturn={(issue) => setReturning({ item, issue })} />
                       : <span className="text-slate-400">—</span>}
                   </Td>
                   <Td className="whitespace-nowrap text-right">
@@ -87,8 +85,8 @@ function ItemsView({ base }: { base: string }) {
         )}
       </ListCard>
 
-      {issuing && <IssueDrawer base={base} item={issuing} customers={customers.data?.items ?? []} onClose={() => setIssuing(null)} />}
-      <ReturnDialog base={base} target={returning} customerName={returning ? customerName(returning.issue.customer_id) : ''} onClose={() => setReturning(null)} />
+      {issuing && <IssueDrawer base={base} item={issuing} onClose={() => setIssuing(null)} />}
+      <ReturnDialog base={base} target={returning} customerName={returning?.issue.customer_name ?? ''} onClose={() => setReturning(null)} />
       {historyFor && <HistoryDrawer base={base} item={historyFor} onClose={() => setHistoryFor(null)} />}
     </>
   )
@@ -101,7 +99,7 @@ function useIssues(base: string, itemId: string) {
 // Lent and received-back invalidate item state, lending history and the linked record's timeline.
 const standbyKeys = (base: string) => [`${base}/standby-items`, `${base}/standby-issues`, `${base}/service-requests`]
 
-function CurrentIssue({ base, item, customerName, onReturn }: { base: string; item: StandbyItem; customerName: (id: string) => string; onReturn: (issue: StandbyIssue) => void }) {
+function CurrentIssue({ base, item, onReturn }: { base: string; item: StandbyItem; onReturn: (issue: StandbyIssueHistory) => void }) {
   const issues = useIssues(base, item.id)
   const issue = issues.data?.items.find((entry) => !entry.returned_at)
   if (!issue) return <span className="text-slate-400">{issues.isPending ? '…' : '—'}</span>
@@ -109,7 +107,7 @@ function CurrentIssue({ base, item, customerName, onReturn }: { base: string; it
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <div className="font-medium text-slate-800">{issue.customer_name ?? customerName(issue.customer_id)}</div>
+        <div className="font-medium text-slate-800">{issue.customer_name}</div>
         <div className={clsx('text-xs', overdue ? 'font-medium text-rose-600' : 'text-slate-400')}>
           Since {formatDate(issue.issued_date)} ({daysLabel(issue.days_out)}){issue.due_date && ` · due ${formatDate(issue.due_date)}`}{overdue && ' · overdue'}
         </div>
@@ -119,12 +117,12 @@ function CurrentIssue({ base, item, customerName, onReturn }: { base: string; it
   )
 }
 
-function IssueDrawer({ base, item, customers, onClose }: { base: string; item: StandbyItem; customers: Customer[]; onClose: () => void }) {
-  const products = useList<Product>(`${base}/products`)
+function IssueDrawer({ base, item, onClose }: { base: string; item: StandbyItem; onClose: () => void }) {
+  const products = useAll<Product>(`${base}/products`, { status: 'ACTIVE' })
   const issue = useApiMutation<unknown>(standbyKeys(base))
   const notify = useToast()
-  const [customerId, setCustomerId] = useState('')
-  const customer = customers.find((item) => item.id === customerId)
+  const [customer, setCustomer] = useState<Customer | null>(null)
+  const customerId = customer?.id ?? ''
   const [record, setRecord] = useState<{ id: string; label: string; profileId: string } | null>(null)
   const [issuedDate, setIssuedDate] = useState(localToday())
   const [dueDate, setDueDate] = useState('')
@@ -154,10 +152,10 @@ function IssueDrawer({ base, item, customers, onClose }: { base: string; item: S
     >
       <CustomerLookup
         label="Customer"
-        customers={customers}
+        base={base}
         value={customer ? { kind: 'existing', customer } : null}
         errors={errors}
-        onChange={(choice) => { setCustomerId(choice?.kind === 'existing' ? choice.customer.id : ''); setRecord(null) }}
+        onChange={(choice) => { setCustomer(choice?.kind === 'existing' ? choice.customer : null); setRecord(null) }}
       />
       <Field label="Linked record" error={errors.service_request_id} hint="Optional. Shows this customer's records.">
         <RecordPicker

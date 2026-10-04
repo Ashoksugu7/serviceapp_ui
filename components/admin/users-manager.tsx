@@ -7,13 +7,14 @@ import { FilterSelect, ListCard, SearchInput, statusLabel, statusTone } from '@/
 import { ConfirmDialog, Drawer, useToast } from '@/components/ui/overlay'
 import { CredentialNotice, type CredentialResult } from './credential-notice'
 import { apiErrorMessage, formError } from '@/lib/api-client'
-import { fieldErrors, formValues, useApiMutation, useListState, useLocalList } from '@/lib/queries'
+import { fieldErrors, formValues, useApiMutation, useList, useListState } from '@/lib/queries'
+import { rules, useFormCheck } from '@/lib/validation'
 import type { CredentialDelivery, User } from '@/lib/types'
 
 export function UsersManager({ companyId }: { companyId: string }) {
   const base = `/companies/${companyId}/users`
   const list = useListState({ status: '', role: '' })
-  const query = useLocalList<User>(base, list.params, (user) => [user.name, user.email, user.phone])
+  const query = useList<User>(base, list.params)
   const save = useApiMutation<User>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ user: User | null } | null>(null)
@@ -23,11 +24,13 @@ export function UsersManager({ companyId }: { companyId: string }) {
 
   function open(user: User | null) {
     save.reset()
+    check.clear()
     setEditor({ user })
   }
 
   function submit(form: HTMLFormElement) {
     const values = formValues(form)
+    if (!check.check(values, { name: rules.name, email: rules.requiredEmail, phone: rules.phone })) return
     const editing = editor?.user
     const body: Record<string, string | null> = { name: values.name, email: values.email, phone: values.phone, role: values.role }
     if (editing) body.status = values.status
@@ -43,7 +46,8 @@ export function UsersManager({ companyId }: { companyId: string }) {
     )
   }
 
-  const errors = fieldErrors(save.error)
+  const check = useFormCheck()
+  const errors = { ...fieldErrors(save.error), ...check.errors }
   const editing = editor?.user ?? null
 
   return (
@@ -90,7 +94,9 @@ export function UsersManager({ companyId }: { companyId: string }) {
         onSubmit={(event) => submit(event.currentTarget)}
         submitLabel={editing ? 'Save changes' : 'Create user'}
         submitting={save.isPending}
-        error={formError(save.error)}
+        error={check.summary ?? formError(save.error)}
+        noValidate
+        onInput={check.onInput}
       >
         <Field label="Full name" required error={errors.name}>
           <Input name="name" required defaultValue={editing?.name} invalid={!!errors.name} />

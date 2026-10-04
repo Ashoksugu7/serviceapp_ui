@@ -7,7 +7,7 @@ import { useState } from 'react'
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Skeleton } from '@/components/ui'
 import { Drawer, useToast } from '@/components/ui/overlay'
 import { api, apiErrorMessage, formError } from '@/lib/api-client'
-import { fieldErrors, useApiMutation, useList, useResource } from '@/lib/queries'
+import { fieldErrors, useAll, useApiMutation, useResource } from '@/lib/queries'
 import type { FormDefinition, ProfileField, ServiceProfile } from '@/lib/types'
 import { FieldEditor, type FieldDraft } from './field-editor'
 import { fieldType } from './field-types'
@@ -29,7 +29,7 @@ export function moveItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
 
 export function FieldsPanel({ profilePath, profile, canWrite }: { profilePath: string; profile: ServiceProfile; canWrite: boolean }) {
   const fieldsPath = `${profilePath}/fields`
-  const fields = useList<ProfileField>(fieldsPath)
+  const fields = useAll<ProfileField>(fieldsPath)
   const form = useResource<FormDefinition>(`${profilePath}/form`)
   const save = useApiMutation<ProfileField>([fieldsPath, `${profilePath}/form`])
   const client = useQueryClient()

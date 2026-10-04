@@ -2,6 +2,7 @@
 
 import clsx from 'clsx'
 import { Lock, Plus, X } from 'lucide-react'
+import Link from 'next/link'
 import { useState, type KeyboardEvent } from 'react'
 import { Checkbox, Field, Input, Select } from '@/components/ui'
 import { Drawer } from '@/components/ui/overlay'
@@ -285,6 +286,15 @@ function TypeConfig({ draft, field, numberFields, staffRoles, setConfig, error }
       return <ChoiceConfig config={config} setConfig={setConfig} error={error} />
 
     case 'staff_role':
+      // New companies start without staff roles (T30); point admins to where they are created.
+      if (staffRoles.length === 0) {
+        return (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            No staff roles yet. Add a role such as &ldquo;Service Engineer&rdquo; under{' '}
+            <Link href="/masters/staff" className="font-medium underline">Masters → Staff</Link>, then come back to this field.
+          </p>
+        )
+      }
       return (
         <Field label="Staff role" required error={error} hint="Only active staff with this role can be picked.">
           <Select required value={String(config.role_id ?? '')} onChange={(event) => setConfig({ role_id: event.target.value })} invalid={!!error}>

@@ -8,19 +8,22 @@ import { FilterSelect, ListCard, SearchInput, statusLabel, statusTone } from '@/
 import { Drawer } from '@/components/ui/overlay'
 import { CredentialNotice, type CredentialResult } from './credential-notice'
 import { formError } from '@/lib/api-client'
-import { fieldErrors, formValues, useApiMutation, useListState, useLocalList } from '@/lib/queries'
+import { fieldErrors, formValues, useApiMutation, useList, useListState } from '@/lib/queries'
+import { rules, useFormCheck } from '@/lib/validation'
 import type { Company, CompanyOnboarded } from '@/lib/types'
 
 export function CompaniesScreen() {
   const list = useListState({ status: '' })
-  const query = useLocalList<Company>('/companies', list.params, (company) => [company.name, company.email, company.contact])
+  const query = useList<Company>('/companies', list.params)
   const onboard = useApiMutation<CompanyOnboarded>(['/companies'])
   const [open, setOpen] = useState(false)
   const [credentials, setCredentials] = useState<CredentialResult | null>(null)
-  const errors = fieldErrors(onboard.error)
+  const check = useFormCheck()
+  const errors = { ...fieldErrors(onboard.error), ...check.errors }
 
   function submit(form: HTMLFormElement) {
     const values = formValues(form)
+    if (!check.check({ ...values, 'admin.name': values.admin_name, 'admin.email': values.admin_email, 'admin.phone': values.admin_phone }, { name: rules.name, email: rules.email, contact: rules.phone, address: rules.address, 'admin.name': rules.name, 'admin.email': rules.requiredEmail, 'admin.phone': rules.phone })) return
     onboard.mutate(
       {
         path: '/companies',
@@ -52,7 +55,7 @@ export function CompaniesScreen() {
           <>
             <SearchInput value={list.q} onChange={list.setQ} placeholder="Search companies" />
             <FilterSelect label="Status" value={list.filters.status} onChange={(value) => list.setFilter('status', value)} options={[{ value: '', label: 'All statuses' }, { value: 'ACTIVE', label: 'Active' }, { value: 'SUSPENDED', label: 'Suspended' }]} />
-            <Button icon={Plus} className="sm:ml-auto" onClick={() => { onboard.reset(); setOpen(true) }}>Onboard company</Button>
+            <Button icon={Plus} className="sm:ml-auto" onClick={() => { onboard.reset(); check.clear(); setOpen(true) }}>Onboard company</Button>
           </>
         }
         empty={{ icon: Building2, title: 'No companies found', description: 'Onboard a company to create its first admin account.' }}
@@ -89,7 +92,9 @@ export function CompaniesScreen() {
         onSubmit={(event) => submit(event.currentTarget)}
         submitLabel="Create company"
         submitting={onboard.isPending}
-        error={formError(onboard.error)}
+        error={check.summary ?? formError(onboard.error)}
+        noValidate
+        onInput={check.onInput}
       >
         <Field label="Company name" required error={errors.name}><Input name="name" required invalid={!!errors.name} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">

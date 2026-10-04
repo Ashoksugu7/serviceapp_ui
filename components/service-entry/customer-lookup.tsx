@@ -2,19 +2,22 @@
 
 import clsx from 'clsx'
 import { Mail, MapPin, Phone, Search, UserCheck, UserPlus, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Field, Input, Textarea, controlClass } from '@/components/ui'
 import { digitsOf, looksLikePhone, matchCustomers } from '@/lib/customers'
+import { useDebounced, useList } from '@/lib/queries'
 import type { Customer } from '@/lib/types'
 
 export type NewCustomerDraft = { name: string; contact: string; address: string; email: string }
 export type CustomerChoice = { kind: 'existing'; customer: Customer } | { kind: 'new'; draft: NewCustomerDraft } | null
 
-// Find a customer by mobile number, customer number or name. An exact match is
-// used straight away; an unknown mobile number opens new-customer fields
-// (when allowCreate) that are saved together with the record.
-export function CustomerLookup({ customers, value, onChange, allowCreate, label, errors = {} }: {
-  customers: Customer[]
+// Find a customer by mobile number or name, searching the API as you type
+// (UI12). An exact mobile-number match is used straight away; an unknown full
+// mobile number opens new-customer fields (when allowCreate) that are saved
+// together with the record.
+export function CustomerLookup({ base, value, onChange, allowCreate, label, errors = {} }: {
+  /** Company path, e.g. /companies/{id}. */
+  base: string
   value: CustomerChoice
   onChange: (choice: CustomerChoice) => void
   allowCreate?: boolean
@@ -22,6 +25,22 @@ export function CustomerLookup({ customers, value, onChange, allowCreate, label,
   errors?: Record<string, string>
 }) {
   const [query, setQuery] = useState(() => (value?.kind === 'new' ? value.draft.contact : ''))
+  const text = useDebounced(query.trim(), 250)
+  const results = useList<Customer>(value?.kind === 'existing' || !text ? null : `${base}/customers`, { q: text, page_size: 8, sort: 'name' })
+  // Results for older text are ignored so a fast typist never gets a stale match.
+  const settled = !results.isFetching && results.data !== undefined && text === query.trim()
+  const { exact, suggestions } = settled ? matchCustomers(results.data.items, text) : { exact: null, suggestions: [] }
+  const phone = looksLikePhone(query)
+  const creating = value?.kind === 'new'
+
+  useEffect(() => {
+    if (!settled || value?.kind === 'existing') return
+    if (exact) onChange({ kind: 'existing', customer: exact })
+    // A full mobile number that nobody has yet starts a new customer right away.
+    else if (allowCreate && !creating && digitsOf(text).length >= 10 && looksLikePhone(text) && suggestions.length === 0) {
+      onChange({ kind: 'new', draft: { name: '', contact: text, address: '', email: '' } })
+    }
+  }, [settled, exact, text]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (value?.kind === 'existing') {
     const { customer } = value
@@ -43,20 +62,10 @@ export function CustomerLookup({ customers, value, onChange, allowCreate, label,
     )
   }
 
-  const { exact, suggestions } = matchCustomers(customers, query)
-  const phone = looksLikePhone(query)
-  const creating = value?.kind === 'new'
-
-  function search(text: string) {
-    setQuery(text)
-    const match = matchCustomers(customers, text)
-    if (match.exact) return onChange({ kind: 'existing', customer: match.exact })
+  function search(next: string) {
+    setQuery(next)
     // Keep a started new-customer form in step with the number being typed.
-    if (creating) return onChange(looksLikePhone(text) ? { kind: 'new', draft: { ...value.draft, contact: text.trim() } } : null)
-    // A full mobile number that nobody has yet starts a new customer right away.
-    if (allowCreate && digitsOf(text).length >= 10 && looksLikePhone(text) && match.suggestions.length === 0) {
-      onChange({ kind: 'new', draft: { name: '', contact: text.trim(), address: '', email: '' } })
-    }
+    if (creating) onChange(looksLikePhone(next) ? { kind: 'new', draft: { ...value.draft, contact: next.trim() } } : null)
   }
 
   const setDraft = (patch: Partial<NewCustomerDraft>) => creating && onChange({ kind: 'new', draft: { ...value.draft, ...patch } })
@@ -96,7 +105,9 @@ export function CustomerLookup({ customers, value, onChange, allowCreate, label,
         </ul>
       )}
 
-      {!creating && query.trim() && !exact && suggestions.length === 0 && (
+      {!creating && query.trim() && !settled && <p className="text-xs text-slate-400">Searching…</p>}
+
+      {!creating && settled && !exact && suggestions.length === 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500">
           <span>No customer found{phone ? ' with this mobile number' : ''}.</span>
           {allowCreate && (
@@ -120,19 +131,19 @@ export function CustomerLookup({ customers, value, onChange, allowCreate, label,
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name" required error={errors['customer.name']}>
-              <Input required maxLength={200} value={value.draft.name} invalid={!!errors['customer.name']} onChange={(event) => setDraft({ name: event.target.value })} />
+              <Input maxLength={200} value={value.draft.name} invalid={!!errors['customer.name']} onChange={(event) => setDraft({ name: event.target.value })} />
             </Field>
             <Field label="Mobile no" required error={errors['customer.contact']}>
-              <Input required type="tel" maxLength={50} value={value.draft.contact} invalid={!!errors['customer.contact']} onChange={(event) => setDraft({ contact: event.target.value })} />
+              <Input type="tel" inputMode="tel" maxLength={50} value={value.draft.contact} invalid={!!errors['customer.contact']} onChange={(event) => setDraft({ contact: event.target.value })} />
             </Field>
             <Field label="Address" error={errors['customer.address']} className="sm:col-span-2">
               <Textarea rows={2} maxLength={4000} value={value.draft.address} invalid={!!errors['customer.address']} onChange={(event) => setDraft({ address: event.target.value })} />
             </Field>
             <Field label="Email" hint="Optional" error={errors['customer.email']}>
-              <Input type="email" maxLength={254} value={value.draft.email} invalid={!!errors['customer.email']} onChange={(event) => setDraft({ email: event.target.value })} />
+              <Input type="text" inputMode="email" autoComplete="email" maxLength={254} value={value.draft.email} invalid={!!errors['customer.email']} onChange={(event) => setDraft({ email: event.target.value })} />
             </Field>
           </div>
-          <p className="mt-3 text-xs text-slate-500">The customer is added with the next customer number when this entry is saved.</p>
+          <p className="mt-3 text-xs text-slate-500">The customer is added when this entry is saved. Each mobile number can belong to only one customer.</p>
         </div>
       )}
     </div>

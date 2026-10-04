@@ -7,7 +7,7 @@ import { FilterSelect, ListCard, SearchInput, statusLabel, statusTone } from '@/
 import { Drawer, useToast } from '@/components/ui/overlay'
 import { useCompanyId, useIdentity } from '@/components/shell/identity'
 import { formError } from '@/lib/api-client'
-import { fieldErrors, formValues, useApiMutation, useListState, useLocalList, useProfiles } from '@/lib/queries'
+import { fieldErrors, formValues, useApiMutation, useList, useListState, useProfiles } from '@/lib/queries'
 import type { Charge, Product, ServiceProfile } from '@/lib/types'
 
 type Kind = 'products' | 'charges'
@@ -51,7 +51,7 @@ function ProductsList({ companyId, profiles }: { companyId: string; profiles: Se
   const canWrite = useIdentity().user.role === 'ADMIN'
   const base = `/companies/${companyId}/products`
   const list = useListState({ profile_id: '', status: '' })
-  const query = useLocalList<Product>(base, list.params, (product) => [product.name, product.brand, product.category])
+  const query = useList<Product>(base, list.params)
   const save = useApiMutation<Product>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ product: Product | null } | null>(null)
@@ -136,7 +136,7 @@ function ChargesList({ companyId, profiles }: { companyId: string; profiles: Ser
   const canWrite = useIdentity().user.role === 'ADMIN'
   const base = `/companies/${companyId}/charges`
   const list = useListState({ profile_id: '', status: '' })
-  const query = useLocalList<Charge>(base, list.params, (charge) => [charge.name, charge.description])
+  const query = useList<Charge>(base, list.params)
   const save = useApiMutation<Charge>([base])
   const notify = useToast()
   const [editor, setEditor] = useState<{ charge: Charge | null } | null>(null)

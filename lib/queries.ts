@@ -27,34 +27,27 @@ export function useList<T>(path: string | null, params: ListParams = {}) {
   })
 }
 
-// The company, user and master list endpoints currently return every row and
-// ignore q/status/profile_id/page (see api/internal/httpapi/management.go
-// writeList), so these screens filter and page in the browser. Swap back to
-// useList once the API honours the documented query parameters.
-export function useLocalList<T extends object>(path: string | null, params: ListParams, searchText: (item: T) => (string | null | undefined)[]) {
-  const query = useQuery({
-    queryKey: [path, 'all'],
-    queryFn: () => api<ListResponse<T>>(path!),
+// Every row of a list, for dropdowns and lookups (products, staff, shops,
+// profiles, fields, statuses). The API pages lists (T37), so this reads pages
+// of 100 until it has them all. Screens that show a list use useList with the
+// page, search and filters instead.
+const ALL_PAGE_SIZE = 100
+const MAX_PAGES = 50
+
+export function useAll<T>(path: string | null, params: ListParams = {}) {
+  return useQuery({
+    queryKey: [path, 'all', params],
+    queryFn: async (): Promise<ListResponse<T>> => {
+      const items: T[] = []
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const response = await api<ListResponse<T>>(`${path}${buildQuery({ ...params, page, page_size: ALL_PAGE_SIZE })}`)
+        items.push(...response.items)
+        if (items.length >= response.total || response.items.length === 0) break
+      }
+      return { items, page: 1, page_size: items.length, total: items.length }
+    },
     enabled: path !== null,
   })
-  const { q, page = 1, page_size: pageSize = 25, ...rest } = params
-  const filters = Object.entries(rest).filter(([key]) => key !== 'sort' && key !== 'order')
-  const needle = String(q ?? '').trim().toLowerCase()
-  const matches = (query.data?.items ?? []).filter((item) => {
-    for (const [key, value] of filters) {
-      if (value !== undefined && value !== '' && String((item as Record<string, unknown>)[key] ?? '') !== String(value)) return false
-    }
-    return !needle || searchText(item).some((text) => text?.toLowerCase().includes(needle))
-  })
-  const size = Number(pageSize)
-  const current = Math.min(Number(page), Math.max(1, Math.ceil(matches.length / size)))
-  const data: ListResponse<T> | undefined = query.data && {
-    items: matches.slice((current - 1) * size, current * size),
-    page: current,
-    page_size: size,
-    total: matches.length,
-  }
-  return { data, isPending: query.isPending, error: query.error }
 }
 
 export function useResource<T>(path: string | null) {
@@ -94,7 +87,7 @@ export function useDebounced<T>(value: T, delay = 300): T {
 }
 
 export function useProfiles(companyId: string | null) {
-  return useList<ServiceProfile>(companyId ? `/companies/${companyId}/service-profiles` : null, { page_size: 100 })
+  return useAll<ServiceProfile>(companyId ? `/companies/${companyId}/service-profiles` : null)
 }
 
 // Empty form inputs become null so optional API fields are cleared, not set to "".

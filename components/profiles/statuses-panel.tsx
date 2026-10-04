@@ -7,13 +7,13 @@ import { useState } from 'react'
 import { Alert, Badge, Button, Card, CardHeader, Checkbox, EmptyState, Field, Input, Skeleton } from '@/components/ui'
 import { ConfirmDialog, Drawer, useToast } from '@/components/ui/overlay'
 import { api, apiErrorMessage, formError } from '@/lib/api-client'
-import { fieldErrors, useApiMutation, useList } from '@/lib/queries'
+import { fieldErrors, useAll, useApiMutation } from '@/lib/queries'
 import type { ProfileStatus, ServiceProfile } from '@/lib/types'
 import { moveItem } from './fields-panel'
 
 export function StatusesPanel({ profilePath, profile, canWrite }: { profilePath: string; profile: ServiceProfile; canWrite: boolean }) {
   const statusesPath = `${profilePath}/statuses`
-  const statuses = useList<ProfileStatus>(statusesPath)
+  const statuses = useAll<ProfileStatus>(statusesPath)
   const save = useApiMutation<ProfileStatus>([profilePath])
   const client = useQueryClient()
   const notify = useToast()

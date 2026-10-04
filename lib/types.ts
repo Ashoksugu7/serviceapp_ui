@@ -281,6 +281,16 @@ export interface OutStoreEntry {
   remarks: string | null
   status: 'SENT' | 'RECEIVED_BACK'
   received_back_at: string | null
+  // Present on list and detail responses (T38); create/edit responses omit them.
+  request_no?: string
+  profile_id?: string
+  profile_name?: string
+  customer_id?: string
+  customer_name?: string
+  customer_contact?: string
+  shop_name?: string
+  shop_contact?: string | null
+  overdue?: boolean
 }
 
 export interface StandbyItem {

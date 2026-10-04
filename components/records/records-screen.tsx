@@ -10,7 +10,7 @@ import { useCompanyId } from '@/components/shell/identity'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, apiErrorMessage } from '@/lib/api-client'
 import { formatDate, localToday } from '@/lib/dates'
-import { buildQuery, useDebounced, useList, type ListParams } from '@/lib/queries'
+import { buildQuery, type ListParams, useAll, useDebounced } from '@/lib/queries'
 import {
   activeFilterCount, emptyRecordFilters, parseRecordFilters, recordFiltersToApi, recordFiltersToSearch,
   type DateRange, type RecordFilters, type RecordSort,
@@ -60,7 +60,7 @@ export function RecordsScreen({ initialSearch }: { initialSearch: string }) {
     queryFn: () => api<RecordList>(`${path}${buildQuery(apiParams)}`),
     placeholderData: keepPreviousData,
   })
-  const profiles = useList<ServiceProfile>(`${base}/service-profiles`)
+  const profiles = useAll<ServiceProfile>(`${base}/service-profiles`)
   const profileList = useMemo(() => [...(profiles.data?.items ?? [])].sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name)), [profiles.data])
   const facets = records.data?.facets
   const activeCount = activeFilterCount(effective)

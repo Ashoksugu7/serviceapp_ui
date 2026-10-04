@@ -6,16 +6,15 @@ import { useState } from 'react'
 import { Badge, Button, Card, CardHeader } from '@/components/ui'
 import { formatDate } from '@/lib/dates'
 import { formatAmount } from '@/lib/format'
-import { useList } from '@/lib/queries'
-import type { OutStoreEntry, OutStoreShop, ServiceProfile, ServiceRequestDetail } from '@/lib/types'
+import { useAll, useList } from '@/lib/queries'
+import type { OutStoreEntry, ServiceProfile, ServiceRequestDetail } from '@/lib/types'
 import { OutStoreEntryDrawer } from './entry-drawer'
 import { isOverdue, ReceiveDialog } from './out-store-screen'
 
 // Out-Store entries for one record, with send / receive actions.
 export function RecordOutStoreCard({ base, record, closed }: { base: string; record: ServiceRequestDetail; closed: boolean }) {
   const entries = useList<OutStoreEntry>(`${base}/out-store-entries`, { service_request_id: record.id, sort: 'sent_date', order: 'desc', page_size: 100 })
-  const profiles = useList<ServiceProfile>(`${base}/service-profiles`)
-  const shops = useList<OutStoreShop>(`${base}/out-store-shops`)
+  const profiles = useAll<ServiceProfile>(`${base}/service-profiles`)
   const [sending, setSending] = useState(false)
   const [receiving, setReceiving] = useState<OutStoreEntry | null>(null)
 
@@ -25,7 +24,6 @@ export function RecordOutStoreCard({ base, record, closed }: { base: string; rec
   if (!ready && items.length === 0) return null
 
   const outstanding = items.some((entry) => entry.status === 'SENT')
-  const shopName = (id: string) => shops.data?.items.find((shop) => shop.id === id)?.shop_name ?? 'Shop'
 
   return (
     <Card>
@@ -40,7 +38,7 @@ export function RecordOutStoreCard({ base, record, closed }: { base: string; rec
           {items.map((entry) => (
             <li key={entry.id} className="space-y-1 px-5 py-3 text-sm">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-slate-800">{shopName(entry.shop_id)}</span>
+                <span className="font-medium text-slate-800">{entry.shop_name ?? 'Shop'}</span>
                 {entry.status === 'SENT' ? <Badge tone="warning">At shop</Badge> : <Badge tone="success">Back</Badge>}
               </div>
               <div className="text-xs text-slate-500">
@@ -63,7 +61,7 @@ export function RecordOutStoreCard({ base, record, closed }: { base: string; rec
           onClose={() => setSending(false)}
         />
       )}
-      <ReceiveDialog base={base} entry={receiving} shopName={receiving ? shopName(receiving.shop_id) : ''} onClose={() => setReceiving(null)} />
+      <ReceiveDialog base={base} entry={receiving} shopName={receiving?.shop_name ?? ''} onClose={() => setReceiving(null)} />
     </Card>
   )
 }

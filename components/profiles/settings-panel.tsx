@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Alert, Button, Card, CardBody, CardHeader, Checkbox, Field, Input, Select } from '@/components/ui'
 import { ConfirmDialog, useToast } from '@/components/ui/overlay'
 import { apiErrorMessage, formError } from '@/lib/api-client'
-import { fieldErrors, useApiMutation, useList } from '@/lib/queries'
+import { fieldErrors, useAll, useApiMutation } from '@/lib/queries'
 import type { ProfileStatus, ServiceProfile } from '@/lib/types'
 
 export function SettingsPanel({ profilesPath, profile, canWrite, isLastActive, onArchived }: {
@@ -17,7 +17,7 @@ export function SettingsPanel({ profilesPath, profile, canWrite, isLastActive, o
   onArchived: () => void
 }) {
   const profilePath = `${profilesPath}/${profile.id}`
-  const statuses = useList<ProfileStatus>(`${profilePath}/statuses`)
+  const statuses = useAll<ProfileStatus>(`${profilePath}/statuses`)
   const mapping = useApiMutation<ServiceProfile>([profilesPath])
   const details = useApiMutation<ServiceProfile>([profilesPath])
   const archive = useApiMutation<void>([profilesPath])

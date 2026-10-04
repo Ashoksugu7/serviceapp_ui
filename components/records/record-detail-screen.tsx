@@ -14,7 +14,7 @@ import { APIError, apiErrorMessage, formError } from '@/lib/api-client'
 import { formatDate } from '@/lib/dates'
 import { activeFields, evaluateFormulas, formDataErrors, formulaOf, type FormValues } from '@/lib/forms/form-values'
 import { displayValue, editableValues, formDataChanges } from '@/lib/forms/record-values'
-import { useApiMutation, useList, useResource } from '@/lib/queries'
+import { useAll, useApiMutation, useList, useResource } from '@/lib/queries'
 import { describeOutStore, describeStandby, type HistoryEvent, type HistoryKind } from '@/lib/history'
 import type { Charge, Customer, HistoryOutStoreValue, HistoryStandbyValue, Product, RequestHistory, ServiceRequestDetail, Staff } from '@/lib/types'
 
@@ -132,10 +132,11 @@ function Item({ label, value, wide, calculated }: { label: string; value: string
 
 function EditCard({ base, path, record, onDone }: { base: string; path: string; record: ServiceRequestDetail; onDone: () => void }) {
   const fields = useMemo(() => activeFields(record.form_definition.fields), [record.form_definition.fields])
-  const customers = useList<Customer>(`${base}/customers`)
-  const products = useList<Product>(`${base}/products`)
-  const charges = useList<Charge>(`${base}/charges`)
-  const staff = useList<Staff>(`${base}/staff`)
+  const products = useAll<Product>(`${base}/products`)
+  const charges = useAll<Charge>(`${base}/charges`)
+  const staff = useAll<Staff>(`${base}/staff`)
+  // The lookup searches customers on the server; keep the one picked here.
+  const [chosen, setChosen] = useState<Customer | null>(record.customer)
   const save = useApiMutation<ServiceRequestDetail>([`${base}/service-requests`])
   const notify = useToast()
   const [draft, setDraft] = useState<EditDraft>(() => ({ serviceDate: record.service_date, customerId: record.customer_id, values: editableValues(fields, record.form_data) }))
@@ -144,7 +145,7 @@ function EditCard({ base, path, record, onDone }: { base: string; path: string; 
   const apiFields = save.error instanceof APIError && save.error.fields ? save.error.fields : {}
   const valueErrors = formDataErrors(apiFields)
   const coreLabel = (key: string) => record.form_definition.core_fields.find((field) => field.key === key)?.label ?? key
-  const customer = (customers.data?.items ?? []).find((item) => item.id === draft.customerId) ?? (draft.customerId === record.customer_id ? record.customer : undefined)
+  const customer = chosen && chosen.id === draft.customerId ? chosen : undefined
 
   function submit() {
     const formData = formDataChanges(fields, record.form_data, draft.values)
@@ -172,10 +173,14 @@ function EditCard({ base, path, record, onDone }: { base: string; path: string; 
             </Field>
             <CustomerLookup
               label={coreLabel('customer_contact')}
-              customers={customers.data?.items ?? [record.customer]}
+              base={base}
               value={customer ? { kind: 'existing', customer } : null}
               errors={apiFields}
-              onChange={(choice) => setDraft((current) => ({ ...current, customerId: choice?.kind === 'existing' ? choice.customer.id : '' }))}
+              onChange={(choice) => {
+                const picked = choice?.kind === 'existing' ? choice.customer : null
+                setChosen(picked)
+                setDraft((current) => ({ ...current, customerId: picked?.id ?? '' }))
+              }}
             />
             {draft.customerId !== record.customer_id && (
               <p className="-mt-2 text-xs text-slate-500 sm:col-span-2">The customer cannot change once the record has been sent to Out-Store or has a stand-by loan.</p>

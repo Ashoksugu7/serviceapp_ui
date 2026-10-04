@@ -7,7 +7,7 @@ import { Drawer, useToast } from '@/components/ui/overlay'
 import { RecordPicker } from '@/components/records/record-picker'
 import { APIError, formError } from '@/lib/api-client'
 import { localToday } from '@/lib/dates'
-import { useApiMutation, useList } from '@/lib/queries'
+import { useAll, useApiMutation } from '@/lib/queries'
 import type { OutStoreEntry, OutStoreShop, ServiceProfile } from '@/lib/types'
 
 type Draft = { recordId: string; recordLabel?: string; profileId?: string; shopId: string; sentDate: string; dueDate: string; price: string; remarks: string }
@@ -19,8 +19,8 @@ export function OutStoreEntryDrawer({ base, entry, record, onClose }: {
   record?: { id: string; label: string; profileId: string }
   onClose: () => void
 }) {
-  const shops = useList<OutStoreShop>(`${base}/out-store-shops`)
-  const profiles = useList<ServiceProfile>(`${base}/service-profiles`)
+  const shops = useAll<OutStoreShop>(`${base}/out-store-shops`)
+  const profiles = useAll<ServiceProfile>(`${base}/service-profiles`)
   // Sending changes the record's status too, so refresh records as well.
   const save = useApiMutation<OutStoreEntry>([`${base}/out-store-entries`, `${base}/service-requests`])
   const notify = useToast()

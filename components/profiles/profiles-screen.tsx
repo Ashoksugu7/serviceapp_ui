@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, Field, Input, SegmentedTabs, Skeleton } from '@/components/ui'
 import { Drawer, useToast } from '@/components/ui/overlay'
 import { apiErrorMessage, formError } from '@/lib/api-client'
-import { fieldErrors, useApiMutation, useList } from '@/lib/queries'
+import { fieldErrors, useAll, useApiMutation } from '@/lib/queries'
 import type { ServiceProfile } from '@/lib/types'
 import { FieldsPanel } from './fields-panel'
 import { SettingsPanel } from './settings-panel'
@@ -20,7 +20,7 @@ function suggestPrefix(name: string) {
 
 export function ProfilesScreen({ companyId, canWrite }: { companyId: string; canWrite: boolean }) {
   const profilesPath = `/companies/${companyId}/service-profiles`
-  const profiles = useList<ServiceProfile>(profilesPath)
+  const profiles = useAll<ServiceProfile>(profilesPath)
   const create = useApiMutation<ServiceProfile>([profilesPath])
   const notify = useToast()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -118,14 +118,14 @@ export function ProfilesScreen({ companyId, canWrite }: { companyId: string; can
         </div>
       ) : (
         <Card>
-          <EmptyState icon={ClipboardList} title="No service profiles" description="Create a profile such as Job Card or Refill to start taking service entries." />
+          <EmptyState icon={ClipboardList} title="No service profiles" description="Create a profile for each kind of service you take in, then add its form fields." />
         </Card>
       )}
 
       <Drawer
         open={creating}
         title="New service profile"
-        description="Starts with the built-in fields and the default status list. Add form fields after creating it."
+        description="Starts with the built-in fields (date, mobile number, customer name) and the statuses Open, In Progress, Sent to Out-Store, Received from Out-Store, Closed and Returned Not Repaired. Add form fields after creating it."
         onClose={() => setCreating(false)}
         submitLabel="Create profile"
         submitting={create.isPending}

@@ -10,7 +10,8 @@ import { useCompanyId, useIdentity } from '@/components/shell/identity'
 import { APIError, apiErrorMessage, formError } from '@/lib/api-client'
 import { addDays, localToday, QUICK_PICKS } from '@/lib/dates'
 import { activeFields, buildFormData, evaluateFormulas, formDataErrors, type FormValues } from '@/lib/forms/form-values'
-import { useApiMutation, useList, useResource } from '@/lib/queries'
+import { useAll, useApiMutation, useResource } from '@/lib/queries'
+import { rules, useFormCheck } from '@/lib/validation'
 import { editableValues } from '@/lib/forms/record-values'
 import type { Charge, Customer, FormDefinition, OutStoreShop, Product, ServiceProfile, ServiceRequestDetail, Staff } from '@/lib/types'
 import { CustomerLookup, type CustomerChoice } from './customer-lookup'
@@ -28,7 +29,7 @@ export function ServiceEntryScreen({ copyFrom }: { copyFrom?: string }) {
   const companyId = useCompanyId()!
   const canManage = useIdentity().user.role === 'ADMIN'
   const base = `/companies/${companyId}`
-  const profiles = useList<ServiceProfile>(`${base}/service-profiles`)
+  const profiles = useAll<ServiceProfile>(`${base}/service-profiles`)
   const active = useMemo(
     () => (profiles.data?.items ?? []).filter((profile) => profile.is_active).sort((a, b) => a.name.localeCompare(b.name)),
     [profiles.data],
@@ -86,12 +87,11 @@ export function ServiceEntryScreen({ copyFrom }: { copyFrom?: string }) {
 function EntryForm({ base, profile, copy }: { base: string; profile: ServiceProfile; copy?: ServiceRequestDetail }) {
   const profilePath = `${base}/service-profiles/${profile.id}`
   const form = useResource<FormDefinition>(`${profilePath}/form`)
-  const customers = useList<Customer>(`${base}/customers`)
-  const products = useList<Product>(`${base}/products`)
-  const charges = useList<Charge>(`${base}/charges`)
-  const staff = useList<Staff>(`${base}/staff`)
+  const products = useAll<Product>(`${base}/products`)
+  const charges = useAll<Charge>(`${base}/charges`)
+  const staff = useAll<Staff>(`${base}/staff`)
   const outStoreReady = profile.out_store_enabled && !!profile.sent_status_id && !!profile.received_status_id
-  const shops = useList<OutStoreShop>(outStoreReady ? `${base}/out-store-shops` : null)
+  const shops = useAll<OutStoreShop>(outStoreReady ? `${base}/out-store-shops` : null, { status: 'ACTIVE', profile_id: profile.id })
   const create = useApiMutation<Created>([`${base}/service-requests`, `${base}/service-profiles`, `${base}/out-store-entries`])
   const notify = useToast()
 
@@ -105,11 +105,12 @@ function EntryForm({ base, profile, copy }: { base: string; profile: ServiceProf
   const fields = useMemo(() => activeFields(form.data?.fields ?? []), [form.data])
   const calculated = useMemo(() => evaluateFormulas(fields, draft.values), [fields, draft.values])
   const options: EntryOptions = { products: products.data?.items ?? [], charges: charges.data?.items ?? [], staff: staff.data?.items ?? [] }
-  const customerList = customers.data?.items ?? []
   const shopList = (shops.data?.items ?? []).filter((shop) => shop.status === 'ACTIVE' && (!shop.profile_id || shop.profile_id === profile.id))
   const labels = profile.core_labels
 
-  const apiFields = create.error instanceof APIError && create.error.fields ? create.error.fields : {}
+  // New-customer details are checked in the browser first (UI05); the API checks everything again.
+  const check = useFormCheck()
+  const apiFields = { ...(create.error instanceof APIError && create.error.fields ? create.error.fields : {}), ...check.errors }
   const valueErrors = formDataErrors(apiFields)
   const outErrors = Object.fromEntries(Object.entries(apiFields).filter(([key]) => key.startsWith('out_store.')).map(([key, message]) => [key.slice(10), message]))
 
@@ -118,6 +119,14 @@ function EntryForm({ base, profile, copy }: { base: string; profile: ServiceProf
 
   function submit() {
     const { outStore } = draft
+    const newCustomer = draft.customer?.kind === 'new' ? draft.customer.draft : null
+    const customerOk = newCustomer
+      ? check.check(
+          { 'customer.name': newCustomer.name, 'customer.contact': newCustomer.contact, 'customer.email': newCustomer.email, 'customer.address': newCustomer.address },
+          { 'customer.name': rules.name, 'customer.contact': rules.requiredPhone, 'customer.email': rules.email, 'customer.address': rules.address },
+        )
+      : check.check({}, {})
+    if (!customerOk) return
     create.mutate(
       {
         path: `${base}/service-requests`,
@@ -179,7 +188,7 @@ function EntryForm({ base, profile, copy }: { base: string; profile: ServiceProf
   
         <Card className="overflow-visible">
           <CardBody className="space-y-5">
-            {formError(create.error) && <Alert>{formError(create.error)}</Alert>}
+            {(check.summary ?? formError(create.error)) && <Alert>{check.summary ?? formError(create.error)}</Alert>}
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label={labels.service_date} required error={apiFields.service_date}>
                 <Input type="date" required value={draft.serviceDate} invalid={!!apiFields.service_date} onChange={(event) => setDraft((current) => ({ ...current, serviceDate: event.target.value }))} />
@@ -187,11 +196,11 @@ function EntryForm({ base, profile, copy }: { base: string; profile: ServiceProf
               <CustomerLookup
               key={formKey}
               label={labels.customer_contact}
-              customers={customerList}
+              base={base}
               value={draft.customer}
               allowCreate
               errors={apiFields}
-              onChange={(customer) => setDraft((current) => ({ ...current, customer }))}
+              onChange={(customer) => { check.clear(); setDraft((current) => ({ ...current, customer })) }}
             />
 
             {fields.map((field) => (
